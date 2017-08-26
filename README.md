@@ -1,2 +1,1 @@
-"# vgpLibrarian" 
-"# vgpLibrarian" 
+A simple tool to keep track of papers, articles, etc. Very much tailored to how I like to work. 
