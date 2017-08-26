@@ -7,6 +7,7 @@
 #include <Shlwapi.h>
 #include <shellapi.h>
 #include <Commdlg.h >
+#include <shobjidl.h> //For IShellItemImageFactory
 
 #include "library.h"
 
@@ -134,7 +135,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	g_hInst = hInstance;
 
-	CoInitialize(NULL);
+	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
 	g_Mutex = CreateMutex(NULL, FALSE, L"VPGLibrarian__892389237874568");
 
@@ -331,6 +332,34 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					g_CurrentDocument = NULL;
 
 					SetWindowText(g_KeywordEditBox, doc->m_keywords.c_str());
+
+					// update thumbnail
+					// code lifted from https://github.com/pauldotknopf/WindowsSDK7-Samples/tree/master/winui/shell/appplatform/UsingImageFactory
+					{
+						HRESULT hr;
+
+						// Getting the IShellItemImageFactory interface pointer for the file.
+						IShellItemImageFactory *pImageFactory;
+						hr = SHCreateItemFromParsingName(doc->m_path.c_str(), NULL, IID_PPV_ARGS(&pImageFactory));
+
+						if (SUCCEEDED(hr))
+						{
+							SIZE size = { 256, 256 };
+
+							//sz - Size of the image, SIIGBF_BIGGERSIZEOK - GetImage will stretch down the bitmap (preserving aspect ratio)
+							HBITMAP hbmp;
+							hr = pImageFactory->GetImage(size, SIIGBF_RESIZETOFIT, &hbmp);
+							//hr = pImageFactory->GetImage(size, SIIGBF_BIGGERSIZEOK, &hbmp);
+
+							if (SUCCEEDED(hr))
+							{
+						        SendDlgItemMessage(g_hWnd, IDC_THUMBNAIL, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hbmp);
+								DeleteObject(hbmp);
+							}
+	
+							pImageFactory->Release();
+						}
+					}
 
 					g_CurrentDocument = doc;
 				}
