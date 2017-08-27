@@ -168,15 +168,21 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	{
 		ListView_SetExtendedListViewStyle(g_ListBox, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
 		
-		LV_COLUMN lvColumn;
+		LVCOLUMN lvColumn;
 		memset(&lvColumn, 0, sizeof(lvColumn));
-		lvColumn.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
+		lvColumn.mask = LVCF_FMT | LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
 
 		lvColumn.pszText = L"Filename";
+		lvColumn.fmt = LVCFMT_RIGHT;
 		ListView_InsertColumn(g_ListBox, 0, &lvColumn);
 
-		lvColumn.pszText = L"Date/Time";
+		lvColumn.pszText = L"Authors";
+		lvColumn.fmt = LVCFMT_LEFT;
 		ListView_InsertColumn(g_ListBox, 1, &lvColumn);
+
+		lvColumn.pszText = L"Company";
+		lvColumn.fmt = LVCFMT_LEFT;
+		ListView_InsertColumn(g_ListBox, 2, &lvColumn);
 	}
 
 	ShowWindow(g_hWnd, nCmdShow);
@@ -249,7 +255,7 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					std::wstring path = g_CurrentDocument->m_path.substr(0, p);
 					
 					TCHAR buffer[256];
-					swprintf(buffer, L"/select,%s", g_CurrentDocument->m_path.c_str());
+					swprintf(buffer, 256, L"/select,%s", g_CurrentDocument->m_path.c_str());
 
 					ShellExecute(NULL, L"open", L"explorer.exe", buffer, NULL, SW_MAXIMIZE);
 				}
@@ -458,7 +464,13 @@ void PopulateListbox(const DocumentList& documents)
 		listItem.mask &= ~LVIF_PARAM;
 		listItem.iItem = count;
 		listItem.iSubItem = 1;
-		listItem.pszText = (LPWSTR)(*itr)->m_timestamp.c_str();
+		listItem.pszText = (LPWSTR)(*itr)->m_authors.c_str();
+		ListView_SetItem(g_ListBox, &listItem);
+
+		listItem.mask &= ~LVIF_PARAM;
+		listItem.iItem = count;
+		listItem.iSubItem = 2;
+		listItem.pszText = (LPWSTR)(*itr)->m_company.c_str();
 		ListView_SetItem(g_ListBox, &listItem);
 
 		if ((*itr) == g_CurrentDocument)
@@ -471,6 +483,7 @@ void PopulateListbox(const DocumentList& documents)
 
 	ListView_SetColumnWidth(g_ListBox, 0, LVSCW_AUTOSIZE);
 	ListView_SetColumnWidth(g_ListBox, 1, LVSCW_AUTOSIZE);
+	ListView_SetColumnWidth(g_ListBox, 2, LVSCW_AUTOSIZE);
 
 	SendMessage(g_ListBox, WM_SETREDRAW, TRUE, 0);
 	RedrawWindow(g_ListBox, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
@@ -490,7 +503,7 @@ void PopulateListbox(const DocumentList& documents)
 	}
 
 	TCHAR buffer[64];
-	swprintf(buffer, L"Results : %d", count);
+	swprintf(buffer, 64, L"Results : %d", count);
 	SetWindowText(g_StaticLabel, buffer);
 }
 
@@ -523,23 +536,15 @@ void ProcessFilterEditBox()
 //---------------------------------------------------------------------------------------------------
 int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
 {
-	Document* a = (Document*)lParam1;
-	Document* b = (Document*)lParam2;
+	Document* a = g_SortAscending ? (Document*)lParam1 : (Document*)lParam2;
+	Document* b = g_SortAscending ? (Document*)lParam2 : (Document*)lParam1;
 	
-	if (g_SortAscending)
-	{
-		if (g_SortIndex == 0)
-			return wcscmp(a->m_pathLower.c_str(), b->m_pathLower.c_str());
-		else
-			return wcscmp(a->m_timestamp.c_str(), b->m_timestamp.c_str());
-	}
-	else
-	{
-		if (g_SortIndex == 0)
-			return wcscmp(b->m_pathLower.c_str(), a->m_pathLower.c_str());
-		else
-			return wcscmp(b->m_timestamp.c_str(), a->m_timestamp.c_str());
-	}
+	if (g_SortIndex == 0)
+		return wcscmp(a->m_pathLower.c_str(), b->m_pathLower.c_str());
+	else if (g_SortIndex == 1)
+		return wcscmp(a->m_authors.c_str(), b->m_authors.c_str());
+	else if (g_SortIndex == 2)
+		return wcscmp(a->m_company.c_str(), b->m_company.c_str());
 }
 
 //---------------------------------------------------------------------------------------------------

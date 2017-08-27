@@ -8,6 +8,7 @@
 #include <string>
 #include <cctype>
 #include "Shlwapi.h"
+#include <regex>
 
 //---------------------------------------------------------------------------------------------------
 // tokenSplit
@@ -58,7 +59,9 @@ std::wstring tokenMerge(const std::vector<std::wstring>& tokens, const std::wstr
 std::wstring toLower(const std::wstring& str)
 {
 	std::wstring temp = str;
-	std::transform(str.begin(), str.end(), temp.begin(), std::tolower);
+	std::transform(str.begin(), str.end(), temp.begin(), ::tolower);
+	//std::transform(str.begin(), str.end(), temp.begin(), [](unsigned char c) -> unsigned char { return std::toupper(c); });
+
 	return temp;
 }
 
@@ -178,7 +181,8 @@ void Library::ScanFolder(const std::wstring& path)
 //---------------------------------------------------------------------------------------------------
 void Library::LoadMeta()
 {
-	FILE* hMetaFile = _wfopen(m_SavePath.c_str(), L"r,ccs=UTF-8");
+	FILE* hMetaFile;
+	_wfopen_s(&hMetaFile, m_SavePath.c_str(), L"r,ccs=UTF-8");
 
 	if (!hMetaFile)
 		return;
@@ -208,7 +212,8 @@ void Library::LoadMeta()
 //---------------------------------------------------------------------------------------------------
 void Library::SaveMeta() const
 {
-	FILE* hFile = _wfopen(m_SavePath.c_str(), L"w,ccs=UTF-8");
+	FILE* hFile;
+	_wfopen_s(&hFile, m_SavePath.c_str(), L"w,ccs=UTF-8");
 
 	if (!hFile)
 		return;
@@ -415,14 +420,84 @@ Documents Documents::Filter(const std::wstring& filterString) const
 //---------------------------------------------------------------------------------------------------
 // SetKeywords
 //---------------------------------------------------------------------------------------------------
-void Document::SetKeywords(const std::wstring& keywordString)
+void Document::SetKeywords(const std::wstring& keywords)
 {
-	std::vector<std::wstring> v = tokenSplit(toLower(keywordString));
+	std::wstring keywordString = toLower(keywords);
 
-	std::set<std::wstring> s;
-	s.insert(v.begin(), v.end());
+	m_keywords.clear();
+	m_authors.clear();
+	m_company.clear();
 
-	std::vector<std::wstring> unique(s.begin(), s.end());
+	// Scan and extract author tags
+	{
+		std::wregex authorRegex(L"author\\s*:\\s*\\{(.*?)\\}");
+	
+		std::wstring keywordsWithoutAuthors;
 
-	m_keywords = tokenMerge(unique);
+		std::vector<std::wstring> authors;
+
+		std::wsmatch results;
+		while (std::regex_search(keywordString, results, authorRegex))
+		{
+ 			authors.push_back(results[1].str());
+
+			keywordsWithoutAuthors += results.prefix();
+			keywordString = results.suffix();
+		}
+
+		keywordsWithoutAuthors += keywordString;
+
+		keywordString = keywordsWithoutAuthors;
+
+		std::sort(authors.begin(), authors.end());
+
+		for (auto author: authors)
+		{
+			m_keywords += L"author:{" + author + L"}, ";
+		}
+
+		m_authors = tokenMerge(authors);
+	}
+
+	// Scan and extract company tags
+	{
+		std::wregex companyRegex(L"company\\s*:\\s*\\{(.*?)\\}");
+	
+		std::wstring keywordsWithoutCompanies;
+
+		std::vector<std::wstring> companies;
+
+		std::wsmatch results;
+		while (std::regex_search(keywordString, results, companyRegex))
+		{
+ 			companies.push_back(results[1].str());
+
+			keywordsWithoutCompanies += results.prefix();
+			keywordString = results.suffix();
+		}
+
+		keywordsWithoutCompanies += keywordString;
+
+		keywordString = keywordsWithoutCompanies;
+
+		std::sort(companies.begin(), companies.end());
+
+		for (auto company: companies)
+		{
+			m_keywords += L"company:{" + company + L"}, ";
+		}
+
+		m_company = tokenMerge(companies);
+	}
+
+	// Split the rest into unique keywords
+	{
+		std::vector<std::wstring> v = tokenSplit(keywordString);
+
+		std::set<std::wstring> s;
+		s.insert(v.begin(), v.end());
+
+		std::vector<std::wstring> unique(s.begin(), s.end());
+		m_keywords += tokenMerge(unique);
+	}
 }

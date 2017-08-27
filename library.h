@@ -19,6 +19,8 @@ struct Document
 	std::wstring	m_path;
 	std::wstring	m_pathLower;
 	std::wstring	m_keywords;
+	std::wstring	m_authors;
+	std::wstring	m_company;
 	unsigned int	m_hash;
 	std::wstring	m_timestamp;
 
