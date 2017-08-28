@@ -8,6 +8,7 @@
 #include <shellapi.h>
 #include <Commdlg.h >
 #include <shobjidl.h> //For IShellItemImageFactory
+//#include <afxwin.h>
 
 #include "library.h"
 
@@ -20,6 +21,8 @@
 
 HINSTANCE		g_hInst;
 HWND			g_hWnd;
+POINT			g_OriginalSize;
+POINT			g_PreviousSize;
 HANDLE			g_Mutex;
 Library*		g_Library = NULL;
 Documents		g_CurrentSelection;
@@ -27,8 +30,8 @@ std::wstring	g_CurrentFilter;
 Document*		g_CurrentDocument = NULL;
 HWND			g_FilterEditBox;
 HWND			g_ListBox;
-HWND			g_StaticLabel;
 HWND			g_KeywordEditBox;
+HWND			g_StatusBar;
 int				g_SortIndex = 0;
 bool			g_SortAscending = true;
 std::wstring	g_AddDialogPath;
@@ -43,6 +46,7 @@ void				ProcessFilterEditBox();
 void				SortList();
 void				Rescan();
 void				CopyToClipboard();
+void				UpdateThumbnail();
 
 //---------------------------------------------------------------------------------------------------
 // wWinMain
@@ -151,18 +155,31 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 							NULL,
 							WndProc);
 
+	RECT rect;
+	GetClientRect(g_hWnd, &rect);
+	g_OriginalSize.x = rect.right - rect.left;
+	g_OriginalSize.y = rect.bottom - rect.top;
+	g_PreviousSize = g_OriginalSize;
+
 	HICON hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_SMALL));
 
 	SendMessage(g_hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+
+	g_StatusBar = CreateWindowEx(	0,
+									STATUSCLASSNAME,
+									L"Hello",
+									SBARS_SIZEGRIP | WS_CHILD | WS_VISIBLE,
+									0, 0, 0, 0,
+									g_hWnd,
+									(HMENU)IDC_STATUSBAR,
+									g_hInst,
+									NULL);
 
 	DragAcceptFiles(g_hWnd, TRUE);
 
 	g_FilterEditBox = GetDlgItem(g_hWnd, IDC_EDIT_FILTER);
 	g_ListBox = GetDlgItem(g_hWnd, IDC_LIST);
-	g_StaticLabel = GetDlgItem(g_hWnd, IDC_STATIC);
 	g_KeywordEditBox = GetDlgItem(g_hWnd, IDC_EDIT_KEYWORDS);
-
-	//SHAutoComplete(g_FilterEditBox, SHACF_FILESYSTEM);
 
 	// Setup list view
 	{
@@ -339,35 +356,9 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 					SetWindowText(g_KeywordEditBox, doc->m_keywords.c_str());
 
-					// update thumbnail
-					// code lifted from https://github.com/pauldotknopf/WindowsSDK7-Samples/tree/master/winui/shell/appplatform/UsingImageFactory
-					{
-						HRESULT hr;
-
-						// Getting the IShellItemImageFactory interface pointer for the file.
-						IShellItemImageFactory *pImageFactory;
-						hr = SHCreateItemFromParsingName(doc->m_path.c_str(), NULL, IID_PPV_ARGS(&pImageFactory));
-
-						if (SUCCEEDED(hr))
-						{
-							SIZE size = { 256, 256 };
-
-							//sz - Size of the image, SIIGBF_BIGGERSIZEOK - GetImage will stretch down the bitmap (preserving aspect ratio)
-							HBITMAP hbmp;
-							hr = pImageFactory->GetImage(size, SIIGBF_RESIZETOFIT, &hbmp);
-							//hr = pImageFactory->GetImage(size, SIIGBF_BIGGERSIZEOK, &hbmp);
-
-							if (SUCCEEDED(hr))
-							{
-						        SendDlgItemMessage(g_hWnd, IDC_THUMBNAIL, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hbmp);
-								DeleteObject(hbmp);
-							}
-	
-							pImageFactory->Release();
-						}
-					}
-
 					g_CurrentDocument = doc;
+
+					UpdateThumbnail();
 				}
 			}
 
@@ -427,6 +418,102 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetFocus(g_KeywordEditBox);
 
 			DragFinish(hDrop);
+
+			break;
+		}
+
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+			lpMMI->ptMinTrackSize.x = 500;
+			lpMMI->ptMinTrackSize.y = 400;
+			break;
+		}
+
+		case WM_SIZE:
+		{
+			// Ughh......it's 2017! Why am I doing this???
+			if (wParam != SIZE_MINIMIZED && hWnd == g_hWnd)
+			{
+				int width = LOWORD(lParam);
+				int height = HIWORD(lParam);
+
+				POINT delta = {width - g_PreviousSize.x, height - g_PreviousSize.y};
+
+				RECT rect;
+
+				int rightAligned[] = {IDC_BUTTON_ADD, IDC_BUTTON_HELP, IDC_THUMBNAIL};
+				int bottomAligned[] = {IDC_BUTTON_HELP, IDC_STATUSBAR, IDC_EDIT_KEYWORDS};
+				int resizeWidth[] = {IDC_LIST, IDC_EDIT_FILTER, IDC_EDIT_KEYWORDS, IDC_STATUSBAR};
+				int resizeHeight[] = {IDC_LIST};
+
+				for (auto ID : resizeWidth)
+				{
+					HWND hwnd = GetDlgItem(g_hWnd, ID);
+
+					GetWindowRect(hwnd, &rect);
+					MapWindowPoints(HWND_DESKTOP, g_hWnd, (LPPOINT)&rect, 2);
+				
+					rect.right += delta.x;
+
+					::SetWindowPos(		hwnd, HWND_TOP, 
+										rect.left, rect.top, 
+										rect.right - rect.left, rect.bottom - rect.top, 
+										SWP_NOMOVE | SWP_NOZORDER | SWP_NOREPOSITION | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+				}
+
+				for (auto ID : resizeHeight)
+				{
+					HWND hwnd = GetDlgItem(g_hWnd, ID);
+
+					GetWindowRect(hwnd, &rect);
+					MapWindowPoints(HWND_DESKTOP, g_hWnd, (LPPOINT)&rect, 2);
+				
+					rect.bottom += delta.y;
+
+					::SetWindowPos(		hwnd, HWND_TOP, 
+										rect.left, rect.top, 
+										rect.right - rect.left, rect.bottom - rect.top, 
+										SWP_NOMOVE | SWP_NOZORDER | SWP_NOREPOSITION | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+				}
+
+				for (auto ID : rightAligned)
+				{
+					HWND hwnd = GetDlgItem(g_hWnd, ID);
+
+					GetWindowRect(hwnd, &rect);
+					MapWindowPoints(HWND_DESKTOP, g_hWnd, (LPPOINT)&rect, 2);
+				
+					rect.left += delta.x;
+					rect.right += delta.x;
+
+					::SetWindowPos(		hwnd, HWND_TOP, 
+										rect.left, rect.top, 
+										rect.right - rect.left, rect.bottom - rect.top, 
+										SWP_NOSIZE | SWP_NOZORDER | SWP_NOREPOSITION | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+				}
+
+				for (auto ID : bottomAligned)
+				{
+					HWND hwnd = GetDlgItem(g_hWnd, ID);
+
+					GetWindowRect(hwnd, &rect);
+					MapWindowPoints(HWND_DESKTOP, g_hWnd, (LPPOINT)&rect, 2);
+				
+					rect.top += delta.y;
+					rect.bottom += delta.y;
+
+					::SetWindowPos(		hwnd, HWND_TOP, 
+										rect.left, rect.top, 
+										rect.right - rect.left, rect.bottom - rect.top, 
+										SWP_NOSIZE | SWP_NOZORDER | SWP_NOREPOSITION | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+				}
+
+				g_PreviousSize.x = width;
+				g_PreviousSize.y = height;
+
+				UpdateThumbnail();
+			}
 
 			break;
 		}
@@ -504,7 +591,7 @@ void PopulateListbox(const DocumentList& documents)
 
 	TCHAR buffer[64];
 	swprintf(buffer, 64, L"Results : %d", count);
-	SetWindowText(g_StaticLabel, buffer);
+	SetWindowText(g_StatusBar, buffer);
 }
 
 //---------------------------------------------------------------------------------------------------
@@ -545,6 +632,7 @@ int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
 		return wcscmp(a->m_authors.c_str(), b->m_authors.c_str());
 	else if (g_SortIndex == 2)
 		return wcscmp(a->m_company.c_str(), b->m_company.c_str());
+	return 0;
 }
 
 //---------------------------------------------------------------------------------------------------
@@ -642,4 +730,38 @@ void CopyToClipboard()
 	SetClipboardData(CF_UNICODETEXT, hglbCopy);
 
 	CloseClipboard();
+}
+
+//---------------------------------------------------------------------------------------------------
+// UpdateThumbnail
+// code lifted from https://github.com/pauldotknopf/WindowsSDK7-Samples/tree/master/winui/shell/appplatform/UsingImageFactory
+//---------------------------------------------------------------------------------------------------
+void UpdateThumbnail()
+{
+	if (!g_CurrentDocument)
+		return;
+
+	HRESULT hr;
+
+	// Getting the IShellItemImageFactory interface pointer for the file.
+	IShellItemImageFactory *pImageFactory;
+	hr = SHCreateItemFromParsingName(g_CurrentDocument->m_path.c_str(), NULL, IID_PPV_ARGS(&pImageFactory));
+
+	if (SUCCEEDED(hr))
+	{
+		SIZE size = { 256, 256 };
+
+		//sz - Size of the image, SIIGBF_BIGGERSIZEOK - GetImage will stretch down the bitmap (preserving aspect ratio)
+		HBITMAP hbmp;
+		hr = pImageFactory->GetImage(size, SIIGBF_RESIZETOFIT, &hbmp);
+		//hr = pImageFactory->GetImage(size, SIIGBF_BIGGERSIZEOK, &hbmp);
+
+		if (SUCCEEDED(hr))
+		{
+			SendDlgItemMessage(g_hWnd, IDC_THUMBNAIL, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hbmp);
+			DeleteObject(hbmp);
+		}
+	
+		pImageFactory->Release();
+	}
 }

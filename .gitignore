@@ -1,3 +1,4 @@
 *.idb
 *.suo
 Debug/
+Release/
