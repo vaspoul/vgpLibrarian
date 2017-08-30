@@ -313,8 +313,8 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (wParam == 1)
 			{
-				ProcessFilterEditBox();
 				KillTimer(g_hWnd, 1);
+				ProcessFilterEditBox();
 			}
 			else if (wParam == 2)
 			{
@@ -613,9 +613,12 @@ void ProcessFilterEditBox()
 		g_CurrentSelection = g_CurrentSelection.Filter(filter.c_str());
 	}
 
-	g_CurrentFilter = filter;
+	if (g_CurrentFilter != filter)
+	{
+		PopulateListbox(g_CurrentSelection.GetDocuments());
+	}
 
-	PopulateListbox(g_CurrentSelection.GetDocuments());
+	g_CurrentFilter = filter;
 }
 
 //---------------------------------------------------------------------------------------------------
