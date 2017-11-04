@@ -108,11 +108,11 @@ void Library::AddScanPath(const std::wstring& rootPath, bool runScan)
 	if (std::find(m_ScanPaths.begin(), m_ScanPaths.end(), path) == m_ScanPaths.end())
 	{
 		m_ScanPaths.push_back(path);
+	}
 
-		if (runScan)
-		{
-			ScanFolder(path);
-		}
+	if (runScan)
+	{
+		ScanFolder(path);
 	}
 }
 
@@ -336,9 +336,11 @@ bool Documents::AddDocument(Document& doc, Document** existingDoc)
 
 			std::vector<std::wstring> set1 = tokenSplit((*itr)->m_keywords);
 			std::vector<std::wstring> set2 = tokenSplit(doc.m_keywords);
+			std::vector<std::wstring> set3 = tokenSplit(doc.m_pathLower, L"\\/");
 
 			keywords.insert(set1.begin(), set1.end());
 			keywords.insert(set2.begin(), set2.end());
+			keywords.insert(set3.begin(), set3.end());
 
 			std::vector<std::wstring> setFinal(keywords.begin(), keywords.end());
 
