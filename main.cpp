@@ -66,15 +66,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	{
 		TCHAR savePathBuffer[512];
-		GetModuleFileName(NULL, savePathBuffer, 512);
+		GetCurrentDirectory(519, savePathBuffer);
 		
 		std::wstring savePath = savePathBuffer;
-		std::wstring::size_type p = savePath.find_last_of(L"\\/");
-
-		if (p != std::wstring::npos)
-		{
-			savePath = savePath.substr(0, p);
-		}
 
 		g_Library = new Library(savePath);
 

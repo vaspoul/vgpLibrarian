@@ -329,7 +329,7 @@ bool Documents::AddDocument(Document& doc, Document** existingDoc)
 
 	for (DocumentList::iterator itr = m_Documents.begin(); itr != m_Documents.end(); ++itr)
 	{
-		if ((*itr)->m_hash == doc.m_hash || (*itr)->m_pathLower == doc.m_pathLower)
+		if ((*itr)->m_hash == doc.m_hash || ((*itr)->m_pathLower.size() == doc.m_pathLower.size() && (*itr)->m_pathLower == doc.m_pathLower))
 		{
 			// Merge keywords
 			std::set<std::wstring> keywords;
