@@ -89,6 +89,27 @@ unsigned int hashString(const std::wstring& str)
 }
 
 //---------------------------------------------------------------------------------------------------
+// hackyIsFolder
+//---------------------------------------------------------------------------------------------------
+bool hackyIsFolder(const std::wstring& path)
+{
+	int lastSlashPos = path.rfind('\\');
+	int lastDotPos = path.rfind('.');
+
+	if (lastSlashPos == path.length())
+		return true;
+
+	if (lastDotPos == -1)
+		return true;
+
+	if (lastDotPos > lastSlashPos)
+		return false;
+
+	return false;
+}
+
+
+//---------------------------------------------------------------------------------------------------
 // Library
 //---------------------------------------------------------------------------------------------------
 Library::Library(const std::wstring& savePath)
@@ -104,6 +125,11 @@ Library::Library(const std::wstring& savePath)
 void Library::AddScanPath(const std::wstring& rootPath, bool runScan)
 {
 	std::wstring path = toLower(rootPath);
+
+	if (path.rfind('\\') != path.length())
+	{
+		path += L"\\";
+	}
 
 	if (std::find(m_ScanPaths.begin(), m_ScanPaths.end(), path) == m_ScanPaths.end())
 	{
@@ -263,12 +289,13 @@ Document* Library::AddDocument(const std::wstring& path, const std::wstring& key
 	}
 	else
 	{
-		WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+		//WIN32_FILE_ATTRIBUTE_DATA fileInfo;
 
-		if (!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &fileInfo))
-			return NULL;
+		//if (!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &fileInfo))
+		//	return NULL;
 
-		if (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		//if (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		if (hackyIsFolder(path))
 		{
 			AddScanPath(path, runScanOnFolders);
 			return NULL;
@@ -280,9 +307,7 @@ Document* Library::AddDocument(const std::wstring& path, const std::wstring& key
 		doc->m_pathLower = toLower(doc->m_path);
 		doc->SetKeywords(keywords);
 
-		doc->m_hash = fileInfo.nFileSizeLow;
-
-		FILETIME fileTime = fileInfo.ftCreationTime;
+		doc->m_hash = hashString(path);
 	}
 
 	Document* existingDoc = NULL;
@@ -431,6 +456,7 @@ void Document::SetKeywords(const std::wstring& keywords)
 	m_company.clear();
 
 	// Scan and extract author tags
+	if (keywords.find(L"author") != -1)
 	{
 		std::wregex authorRegex(L"author\\s*:\\s*\\{(.*?)\\}");
 	
@@ -462,6 +488,7 @@ void Document::SetKeywords(const std::wstring& keywords)
 	}
 
 	// Scan and extract company tags
+	if (keywords.find(L"company") != -1)
 	{
 		std::wregex companyRegex(L"company\\s*:\\s*\\{(.*?)\\}");
 	
