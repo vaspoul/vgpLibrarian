@@ -42,7 +42,7 @@ BOOL                InitInstance(HINSTANCE, int);
 INT_PTR CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 BOOL CALLBACK		AddDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam);
 void				PopulateListbox(const DocumentList& documents);
-void				ProcessFilterEditBox();
+void				ProcessFilterEditBox(bool forceUpdate = false);
 void				SortList();
 void				Rescan();
 void				CopyToClipboard();
@@ -266,7 +266,7 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					std::wstring path = g_CurrentDocument->m_path.substr(0, p);
 					
 					TCHAR buffer[256];
-					swprintf(buffer, 256, L"/select,%s", g_CurrentDocument->m_path.c_str());
+					swprintf(buffer, 256, L"/select,%s", g_CurrentDocument->m_pathLower.c_str());
 
 					ShellExecute(NULL, L"open", L"explorer.exe", buffer, NULL, SW_MAXIMIZE);
 				}
@@ -294,7 +294,7 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					g_CurrentSelection.Clear();
 					g_CurrentFilter = L"";
 
-					ProcessFilterEditBox();
+					ProcessFilterEditBox(true);
 
 					SetFocus(g_KeywordEditBox);
 				}
@@ -321,7 +321,7 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 						g_CurrentSelection = g_Library->Filter(L"");
 						g_CurrentFilter = L"";
-						ProcessFilterEditBox();
+						ProcessFilterEditBox(true);
 					}
 				}
 			}
@@ -408,7 +408,7 @@ INT_PTR CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 
 			g_Library->SaveMeta();
-			ProcessFilterEditBox();
+			ProcessFilterEditBox(true);
 			SetFocus(g_KeywordEditBox);
 
 			DragFinish(hDrop);
@@ -569,13 +569,12 @@ void PopulateListbox(const DocumentList& documents)
 	SendMessage(g_ListBox, WM_SETREDRAW, TRUE, 0);
 	RedrawWindow(g_ListBox, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 
-	ListView_EnsureVisible(g_ListBox, selectionIndex, FALSE);
-	ListView_SetItemState(g_ListBox, selectionIndex, LVIS_SELECTED, LVIS_SELECTED);
-
 	SortList();
 
-
 	EnableWindow(g_KeywordEditBox, (count > 0));
+
+	ListView_EnsureVisible(g_ListBox, selectionIndex, FALSE);
+	ListView_SetItemState(g_ListBox, selectionIndex, LVIS_SELECTED, LVIS_SELECTED);
 
 	if (count == 0)
 	{
@@ -591,7 +590,7 @@ void PopulateListbox(const DocumentList& documents)
 //---------------------------------------------------------------------------------------------------
 // ProcessFilterEditBox
 //---------------------------------------------------------------------------------------------------
-void ProcessFilterEditBox()
+void ProcessFilterEditBox(bool forceUpdate)
 {
 	TCHAR buffer[1024];
 	GetWindowText(g_FilterEditBox, buffer, 1024);
@@ -607,7 +606,7 @@ void ProcessFilterEditBox()
 		g_CurrentSelection = g_CurrentSelection.Filter(filter.c_str());
 	}
 
-	if (g_CurrentFilter != filter)
+	if (forceUpdate || g_CurrentFilter != filter)
 	{
 		PopulateListbox(g_CurrentSelection.GetDocuments());
 	}
@@ -654,7 +653,7 @@ void Rescan()
 	g_Library->SaveMeta();
 
 	g_CurrentSelection = g_Library->Filter(L"");
-	ProcessFilterEditBox();
+	ProcessFilterEditBox(true);
 }
 
 //---------------------------------------------------------------------------------------------------

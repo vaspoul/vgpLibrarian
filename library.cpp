@@ -66,6 +66,24 @@ std::wstring toLower(const std::wstring& str)
 }
 
 //---------------------------------------------------------------------------------------------------
+// fixPath
+//---------------------------------------------------------------------------------------------------
+std::wstring fixPath(const std::wstring& path)
+{
+	std::wstring temp = toLower(path);
+
+	int pos = temp.find(L"\\\\");
+
+	while (pos != -1)
+	{
+		temp.replace(pos, 2, L"\\");
+		pos = temp.find(L"\\\\");
+	}
+
+	return temp;
+}
+
+//---------------------------------------------------------------------------------------------------
 // hashString
 // FNV www.isthe.com/chongo/tech/comp/fnv/
 //---------------------------------------------------------------------------------------------------
@@ -126,7 +144,7 @@ void Library::AddScanPath(const std::wstring& rootPath, bool runScan)
 {
 	std::wstring path = toLower(rootPath);
 
-	if (path.rfind('\\') != path.length())
+	if (path.rfind('\\') != path.length()-1)
 	{
 		path += L"\\";
 	}
@@ -280,10 +298,10 @@ Document* Library::AddDocument(const std::wstring& path, const std::wstring& key
 		doc = new Document();
 
 		doc->m_path = path;
-		doc->m_pathLower = toLower(doc->m_path);
+		doc->m_pathLower = fixPath(doc->m_path);
 		doc->SetKeywords(keywords);
 
-		doc->m_hash = hashString(path);
+		doc->m_hash = hashString(doc->m_pathLower);
 
 		doc->m_timestamp = L"";
 	}
@@ -297,17 +315,26 @@ Document* Library::AddDocument(const std::wstring& path, const std::wstring& key
 		//if (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		if (hackyIsFolder(path))
 		{
-			AddScanPath(path, runScanOnFolders);
+			WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+
+			if (GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &fileInfo))
+			{
+				if (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				{
+					AddScanPath(path, runScanOnFolders);
+				}
+			}
+
 			return NULL;
 		}
 
 		doc = new Document();
 
 		doc->m_path = path;
-		doc->m_pathLower = toLower(doc->m_path);
+		doc->m_pathLower = fixPath(doc->m_path);
 		doc->SetKeywords(keywords);
 
-		doc->m_hash = hashString(path);
+		doc->m_hash = hashString(doc->m_pathLower);
 	}
 
 	Document* existingDoc = NULL;
